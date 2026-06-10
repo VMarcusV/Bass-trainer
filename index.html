@@ -296,26 +296,36 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
       </div>
     </div>
 
-    <!-- ── OCTAAF ─────────────────────── -->
+    <!-- ── SPRONGEN ───────────────────── -->
     <div id="pOctave" class="panel">
       <div class="score-row">
         <div class="sc"><div class="sc-val" id="oG">0</div><div class="sc-lbl">✅ Goed</div></div>
         <div class="sc"><div class="sc-val" id="oB">0</div><div class="sc-lbl">❌ Fout</div></div>
         <div class="sc"><div class="sc-val" id="oS">0</div><div class="sc-lbl">🔥 Streak</div></div>
       </div>
+      <div class="tag-strip" id="octModeTabs">
+        <button class="tag active" onclick="setOctMode('octave')">8 Octaaf</button>
+        <button class="tag" onclick="setOctMode('kwint')">5 Kwint</button>
+        <button class="tag" onclick="setOctMode('kwart')">4 Kwart</button>
+        <button class="tag" onclick="setOctMode('terts')">3 Terts</button>
+        <button class="tag" onclick="setOctMode('walk')">🚶 Walk</button>
+      </div>
       <div class="quiz-card">
-        <div class="chal-lbl">VIND HET OCTAAF</div>
+        <div class="chal-lbl" id="oChalLbl">VIND HET OCTAAF</div>
         <div class="chal-note" id="oNote">?</div>
         <div class="chal-sub" id="oSub" style="margin-bottom:8px">snaar <strong>—</strong> · fret <strong>—</strong></div>
-        <button class="snd-btn" id="oSndBtn" onclick="playOctaveQ()">🔊 Hoor beide noten</button>
-        <div class="feed idle" id="oFeed">Tik het octaaf aan op de hals ↑</div>
+        <button class="snd-btn" id="oSndBtn" onclick="playOctaveQ()">🔊 Hoor het voorbeeld</button>
+        <div class="feed idle" id="oFeed">Tik op de hals ↑</div>
         <button class="next-btn" id="oNext" onclick="nextOctaveQ()">Volgende →</button>
         <div class="hint" id="oHint"></div>
       </div>
-      <div class="card"><h3>💡 Octaaf-truc</h3>
-        <p><strong>2 snaren lager + 2 frets hoger</strong> = zelfde noot, een octaaf hoger.<br>
-        Voorbeeld: A op E-snaar fret 5 → octaaf op D-snaar fret 7.<br>
-        Dit patroon werkt overal op de hals!</p>
+      <div class="card"><h3>💡 Sprong-trucs op de bas</h3>
+        <p>
+        <strong>Octaaf (8):</strong> 2 snaren hoger + 2 frets hoger<br>
+        <strong>Kwint (5):</strong> 1 snaar hoger + 2 frets hoger<br>
+        <strong>Kwart (4):</strong> 1 snaar hoger, zelfde fret<br>
+        <strong>Grote terts (3):</strong> 1 snaar hoger, 1 fret lager<br>
+        <strong>Walking:</strong> verbind twee noten chromatisch — elke fret is een stap. Dé manier om soepel tussen akkoorden te bewegen!</p>
       </div>
     </div>
 
@@ -369,7 +379,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <div class="pat-detail-sub" id="pdDesc">—</div>
         <div class="root-selector" id="rootSelector"></div>
         <div class="pat-positions" id="pdPositions"></div>
-        <p style="font-size:0.74rem;color:var(--muted);margin-top:8px">🟠 oranje = grondtoon (R) &nbsp;·&nbsp; 🔵 blauw = patroon-noot</p>
+        <div id="pdLegend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
         <button class="btn btn-ghost" onclick="closePat()" style="margin-top:10px;font-size:0.8rem;padding:7px 14px">✕ Sluiten</button>
       </div>
 
@@ -402,7 +412,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
     <button class="tab-item active" onclick="setMode('learn')"    id="tab-learn">   <span class="ti">🎸</span>Hals</button>
     <button class="tab-item"        onclick="setMode('quiz')"     id="tab-quiz">    <span class="ti">🎯</span>Quiz</button>
     <button class="tab-item"        onclick="setMode('ear')"      id="tab-ear">     <span class="ti">👂</span>Gehoor</button>
-    <button class="tab-item"        onclick="setMode('octave')"   id="tab-octave">  <span class="ti">🎸</span>Octaaf</button>
+    <button class="tab-item"        onclick="setMode('octave')"   id="tab-octave">  <span class="ti">↗️</span>Sprongen</button>
     <button class="tab-item"        onclick="setMode('mic')"      id="tab-mic">     <span class="ti">🎤</span>Speel</button>
     <button class="tab-item"        onclick="setMode('patterns')" id="tab-patterns"><span class="ti">🎼</span>Patronen</button>
   </nav>
@@ -494,6 +504,7 @@ let wc={},ewc={};
 let qLocked=false,eLocked=false,oLocked=false;
 let hlCell=null;
 let actx=null,analyser=null,micStream=null,micOn=false,pitchTick=null,micBusy=false,vuRaf=null;
+let suppressUntil=0; // mic-detectie pauzeren terwijl de app zelf geluid afspeelt
 let timerOn=false,timerSec=10,timerInterval=null,timerRemaining=0;
 let earSubMode='note';
 let patRoot=0,activePat=null;
@@ -512,6 +523,8 @@ function unlockAudio(){
 function playNote(midi,dur=1.5,delay=0){
   if(!actx)return;
   if(actx.state==='suspended')actx.resume();
+  // Mic-detectie onderdrukken zolang dit geluid klinkt (+ na-galm buffer)
+  suppressUntil=Math.max(suppressUntil,Date.now()+(delay+dur)*1000+400);
   const freq=midiFreq(midi),ctx=actx,t=ctx.currentTime+delay;
   const master=ctx.createGain();master.connect(ctx.destination);
   master.gain.setValueAtTime(0,t);
@@ -547,12 +560,6 @@ function playChord(intervals,rootMidi,ascending=false){
 function flashSnd(id){const b=document.getElementById(id);if(b){b.classList.add('playing');setTimeout(()=>b.classList.remove('playing'),500);}}
 function playQNote(){if(curQ){flashSnd('qSndBtn');playNote(curQ.midi);}}
 function playMNote(){if(curM){flashSnd('mSndBtn');playNote(OPEN_MIDI[curM.string]+curM.fret);}}
-function playOctaveQ(){
-  if(!curO)return;
-  flashSnd('oSndBtn');
-  playNote(curO.midi);
-  setTimeout(()=>playNote(curO.midi+12),600);
-}
 function playEarQ(){
   if(!curE)return;
   flashSnd('eSndBtn');
@@ -881,49 +888,139 @@ function submitEarQ(chosen,btn){
 function chkEarLvl(){const L=EAR_LVLS[elvl];if(exp>=L.xp&&elvl<EAR_LVLS.length-1){elvl++;exp=0;toast('👂 EAR LEVEL UP!');updUI();if(mode==='ear')setTimeout(nextEarQ,1200);}}
 
 // ══════════════════════════════════════════════════════
-// OCTAVE MODE
+// SPRONGEN MODE (octaaf, kwint, kwart, terts, walk)
 // ══════════════════════════════════════════════════════
+let octSubMode='octave';
+// ds = snaren omhoog, df = frets verschuiving, semi = halve tonen
+const JUMPS={
+  octave:{ds:2,df:2, semi:12,label:'HET OCTAAF', naam:'octaaf'},
+  kwint: {ds:1,df:2, semi:7, label:'DE KWINT',   naam:'kwint'},
+  kwart: {ds:1,df:0, semi:5, label:'DE KWART',   naam:'kwart'},
+  terts: {ds:1,df:-1,semi:4, label:'DE GROTE TERTS',naam:'grote terts'},
+};
+
+function setOctMode(m){
+  octSubMode=m;
+  document.querySelectorAll('#octModeTabs .tag').forEach((t,i)=>
+    t.classList.toggle('active',['octave','kwint','kwart','terts','walk'][i]===m));
+  nextOctaveQ();
+}
+
 function nextOctaveQ(){
   oLocked=false;octaveTarget=null;
-  // Pick a cell that has a valid octave on the fretboard
-  const cells=lvlCells().filter(c=>{
-    // octave = 2 strings lower + 2 frets higher, OR 2 strings higher - 2 frets
-    const s2=c.string+2,f2=c.fret+2;
-    return s2<=3&&f2<=12;
-  });
-  if(!cells.length){setFeed('oFeed','warn','Speel meer levels om octaven te oefenen');return;}
-  const cell=cells[Math.floor(Math.random()*cells.length)];
-  curO={...cell,midi:OPEN_MIDI[cell.string]+cell.fret,correctNote:FB[cell.string][cell.fret].note};
-  // The octave position
-  const octStr=cell.string+2,octFret=cell.fret+2;
-  curO.octaveString=octStr;curO.octaveFret=octFret;
-
+  if(octSubMode==='walk'){
+    nextWalkQ();return;
+  }
+  const J=JUMPS[octSubMode];
+  // Kies een startcel waarvan het doel binnen de hals valt
+  const opts=[];
+  for(let s=0;s<4;s++)for(let f=0;f<=12;f++){
+    const s2=s+J.ds,f2=f+J.df;
+    if(s2<=3&&f2>=0&&f2<=12)opts.push({string:s,fret:f});
+  }
+  const cell=opts[Math.floor(Math.random()*opts.length)];
+  curO={type:'jump',...cell,midi:OPEN_MIDI[cell.string]+cell.fret,
+    correctNote:FB[cell.string][cell.fret].note,
+    targetString:cell.string+J.ds,targetFret:cell.fret+J.df,
+    targetNote:noteName(OPEN_MIDI[cell.string+J.ds]+cell.fret+J.df)};
+  document.getElementById('oChalLbl').textContent='VIND '+J.label;
   document.getElementById('oNote').textContent=curO.correctNote;
   document.getElementById('oSub').innerHTML=`snaar <strong>${SNAMES[curO.string]}</strong> · fret <strong>${curO.fret===0?'open':curO.fret}</strong>`;
-  setFeed('oFeed','idle','Tik het octaaf aan op de hals ↑');
+  setFeed('oFeed','idle',`Tik de ${J.naam} van ${curO.correctNote} aan op de hals ↑`);
   document.getElementById('oHint').classList.remove('on');
   document.getElementById('oNext').classList.remove('on');
   drawNeck(null,curO,null,null,null);
   setTimeout(playOctaveQ,300);
 }
 
+// ── WALKING ──
+function nextWalkQ(){
+  // Kies snaar, startfret, richting, aantal tussennoten (1-3)
+  const n=1+Math.floor(Math.random()*3); // tussennoten
+  const dir=Math.random()<0.5?1:-1;
+  const span=n+1; // totaal frets verschil
+  const s=Math.floor(Math.random()*4);
+  const validStarts=[];
+  for(let f=0;f<=12;f++){const ft=f+span*dir;if(ft>=0&&ft<=12)validStarts.push(f);}
+  const f0=validStarts[Math.floor(Math.random()*validStarts.length)];
+  const ft=f0+span*dir;
+  const seq=[];
+  for(let i=1;i<=span;i++)seq.push(f0+i*dir);
+  curO={type:'walk',string:s,fret:f0,startFret:f0,targetFret:ft,dir,seq,idx:0,
+    startNote:FB[s][f0].note,targetNote:FB[s][ft].note};
+  document.getElementById('oChalLbl').textContent='WALKING — VERBIND DE NOTEN';
+  document.getElementById('oNote').innerHTML=`${curO.startNote} <span style="color:var(--muted);font-size:0.5em">${dir>0?'⟶':'⟵'}</span> ${curO.targetNote}`;
+  document.getElementById('oSub').innerHTML=`${SNAMES[s]}-snaar · chromatisch ${dir>0?'omhoog':'omlaag'} · <strong>${n} tussennoot${n>1?'en':''}</strong>`;
+  setFeed('oFeed','idle',`Tik de ${n+1} stappen één voor één aan, eindig op ${curO.targetNote} ↑`);
+  document.getElementById('oHint').classList.remove('on');
+  document.getElementById('oNext').classList.remove('on');
+  drawNeck(null,curO,null,null,null);
+  setTimeout(playOctaveQ,300);
+}
+
+function playOctaveQ(){
+  if(!curO)return;
+  flashSnd('oSndBtn');
+  if(curO.type==='walk'){
+    // Speel hele loop: start + alle stappen
+    playNote(OPEN_MIDI[curO.string]+curO.startFret,0.6);
+    curO.seq.forEach((f,i)=>playNote(OPEN_MIDI[curO.string]+f,0.6,(i+1)*0.45));
+  }else{
+    playNote(curO.midi);
+    setTimeout(()=>playNote(OPEN_MIDI[curO.targetString]+curO.targetFret),600);
+  }
+}
+
 function checkOctaveAnswer(s,f){
   if(!curO||oLocked)return;
-  const ok=s===curO.octaveString&&f===curO.octaveFret;
+  if(curO.type==='walk'){
+    const expectedFret=curO.seq[curO.idx];
+    const ok=(s===curO.string&&f===expectedFret);
+    if(ok){
+      playNote(OPEN_MIDI[s]+f,0.7);
+      curO.idx++;
+      // Toon voortgang: getikte stappen groen
+      const done=curO.seq.slice(0,curO.idx).map(fr=>({string:curO.string,fret:fr,color:'#3fcf6e',label:FB[curO.string][fr].note}));
+      drawNeck(null,curO,null,null,done);
+      if(curO.idx>=curO.seq.length){
+        oLocked=true;oG++;oStr++;xp+=2;
+        setFeed('oFeed','ok',`✅ Perfecte walk van ${curO.startNote} naar ${curO.targetNote}!`);
+        if(oStr%3===0)toast(`🚶 ${oStr}× STREAK!`);
+        updUI();chkLvl();setTimeout(nextWalkQ,1100);
+      }else{
+        setFeed('oFeed','listen',`👍 Stap ${curO.idx}/${curO.seq.length} — ga door!`);
+      }
+    }else{
+      oLocked=true;oB++;oStr=0;
+      const path=curO.seq.map(fr=>({string:curO.string,fret:fr,color:'#3fcf6e',label:FB[curO.string][fr].note}));
+      drawNeck(null,curO,{string:s,fret:f},'no',path);
+      setFeed('oFeed','no',`❌ Niet die — het juiste pad is nu groen gemarkeerd`);
+      const h=document.getElementById('oHint');
+      h.innerHTML=`💡 Chromatisch lopen = elke fret is één stap. Van ${curO.startNote} (fret ${curO.startFret}) ${curO.dir>0?'omhoog':'omlaag'} naar ${curO.targetNote} (fret ${curO.targetFret}).`;
+      h.classList.add('on');
+      document.getElementById('oNext').classList.add('on');
+      updUI();
+    }
+    return;
+  }
+  // ── jump modes ──
+  const J=JUMPS[octSubMode];
+  const ok=s===curO.targetString&&f===curO.targetFret;
   oLocked=true;
-  octaveTarget={string:s,fret:f};
   if(ok){
+    playNote(OPEN_MIDI[s]+f,0.8);
     oG++;oStr++;xp++;
-    setFeed('oFeed','ok',`✅ Correct! ${curO.correctNote} op ${SNAMES[s]}-snaar fret ${f}`);
+    setFeed('oFeed','ok',`✅ Correct! ${curO.targetNote} = ${J.naam} van ${curO.correctNote}`);
     drawNeck(null,curO,{string:s,fret:f},'ok',null);
     if(oStr%3===0)toast(`🎸 ${oStr}× STREAK!`);
     updUI();chkLvl();setTimeout(nextOctaveQ,1000);
   }else{
     oB++;oStr=0;
-    setFeed('oFeed','no',`❌ Niet helemaal — octaaf zit op ${SNAMES[curO.octaveString]}-snaar fret ${curO.octaveFret}`);
-    drawNeck(null,curO,{string:curO.octaveString,fret:curO.octaveFret},'ok',null);
+    setFeed('oFeed','no',`❌ De ${J.naam} zit op ${SNAMES[curO.targetString]}-snaar fret ${curO.targetFret}`);
+    drawNeck(null,curO,{string:curO.targetString,fret:curO.targetFret},'ok',null);
+    const trick=J.df===0?'zelfde fret':(J.df>0?J.df+' frets hoger':Math.abs(J.df)+' fret lager');
     const h=document.getElementById('oHint');
-    h.innerHTML=`💡 Truc: ${curO.correctNote} op ${SNAMES[curO.string]}-snaar fret ${curO.fret} → octaaf op ${SNAMES[curO.octaveString]}-snaar fret ${curO.octaveFret}`;
+    h.innerHTML=`💡 Truc: ${J.naam} = ${J.ds} sna${J.ds>1?'ren':'ar'} hoger + ${trick}`;
     h.classList.add('on');document.getElementById('oNext').classList.add('on');
     updUI();
   }
@@ -997,6 +1094,7 @@ function vuLoop(){
 }
 function detectPitch(){
   if(!analyser||micBusy)return;
+  if(Date.now()<suppressUntil)return; // app speelt zelf geluid — niet luisteren
   const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
   if(rms<0.0015){document.getElementById('vuNote').textContent='—';document.getElementById('eVuNote').textContent='—';return;}
@@ -1096,6 +1194,24 @@ function openPat(pat,type){
   },300);
 }
 
+// Vaste kleur per toonsoort (interval t.o.v. grondtoon, in halve tonen)
+const INT_COLORS={
+  0:'#e8a923',  // R  — grondtoon (amber)
+  1:'#9ca3af',  // ♭2 — grijs
+  2:'#22d3ee',  // 2  — cyaan
+  3:'#4488ff',  // ♭3 — blauw
+  4:'#3fcf6e',  // 3  — groen
+  5:'#a855f7',  // 4  — paars
+  6:'#e84040',  // ♭5 — rood (blue note!)
+  7:'#f472b6',  // 5  — roze
+  8:'#64748b',  // ♭6 — leigrijs
+  9:'#14b8a6',  // 6  — teal
+  10:'#fb923c', // ♭7 — oranje
+  11:'#c084fc', // 7  — lila
+};
+const INT_SHORT=['R','♭2','2','♭3','3','4','♭5','5','♭6','6','♭7','7'];
+const INT_FULL=['Grondtoon','Kleine secunde','Grote secunde','Kleine terts','Grote terts','Kwart','Tritonus (blue note)','Kwint','Kleine sext','Grote sext','Kleine septiem','Grote septiem'];
+
 function showPatOnNeck(){
   if(!activePat)return;
   const cells=[];
@@ -1105,10 +1221,9 @@ function showPatOnNeck(){
       const noteIdx=((midi%12)+12)%12;
       const relIdx=((noteIdx-patRoot)+12)%12;
       const posInPat=activePat.intervals.indexOf(relIdx);
-      if(posInPat!==-1){
-        const isRoot=relIdx===0;
-        cells.push({string:s,fret:f,color:isRoot?'#e8a923':'#4488ff',
-          label:isRoot?'R':noteName(midi)});
+      const posOct=activePat.intervals.indexOf(relIdx+12); // octaaf-notatie in patroon
+      if(posInPat!==-1||posOct!==-1){
+        cells.push({string:s,fret:f,color:INT_COLORS[relIdx],label:INT_SHORT[relIdx]});
       }
     }
   }
@@ -1118,13 +1233,25 @@ function showPatOnNeck(){
 function showPatPositions(){
   if(!activePat)return;
   const rootNote=NOTES[patRoot];
-  // Show note names in the pattern
-  const noteNames=activePat.intervals.map(iv=>{
-    const ni=(patRoot+iv)%12;return NOTES[ni];
-  });
-  const intNames=['R','m2','M2','m3','M3','P4','TT','P5','m6','M6','m7','M7','8'];
-  const desc=activePat.intervals.map((iv,i)=>`<strong style="color:var(--text)">${noteNames[i]}</strong><span style="color:var(--muted)"> (${intNames[iv]||iv})</span>`).join(' – ');
+  // Noten in dit patroon, gekleurd per toonsoort
+  const desc=activePat.intervals.map(iv=>{
+    const rel=iv%12;
+    const ni=(patRoot+iv)%12;
+    return `<strong style="color:${INT_COLORS[rel]}">${NOTES[ni]}</strong><span style="color:var(--muted)"> (${INT_SHORT[rel]})</span>`;
+  }).join(' – ');
   document.getElementById('pdPositions').innerHTML=`Noten in ${rootNote}: ${desc}`;
+  // Kleur-legenda voor dit patroon
+  const legend=document.getElementById('pdLegend');
+  legend.innerHTML='';
+  const seen=new Set();
+  activePat.intervals.forEach(iv=>{
+    const rel=iv%12;
+    if(seen.has(rel))return;seen.add(rel);
+    const chip=document.createElement('div');
+    chip.style.cssText=`display:flex;align-items:center;gap:5px;background:var(--surface2);border-radius:6px;padding:4px 9px;font-size:0.7rem;color:var(--muted)`;
+    chip.innerHTML=`<span style="width:11px;height:11px;border-radius:50%;background:${INT_COLORS[rel]};display:inline-block;flex-shrink:0"></span><strong style="color:var(--text)">${INT_SHORT[rel]}</strong> ${INT_FULL[rel]}`;
+    legend.appendChild(chip);
+  });
 }
 
 function closePat(){
