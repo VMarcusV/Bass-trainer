@@ -221,6 +221,10 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <strong>Octaaf:</strong> 2 snaren lager + 2 frets hoger = zelfde noot<br>
         <strong>Fret 12:</strong> gelijk aan open snaar, een octaaf hoger</p>
       </div>
+      <div class="card"><h3>⚙️ Voortgang</h3>
+        <p style="margin-bottom:10px">Je voortgang wordt automatisch opgeslagen op dit apparaat.</p>
+        <button class="btn btn-ghost" onclick="resetProgress()" style="font-size:0.8rem;padding:8px 16px">🔄 Voortgang wissen</button>
+      </div>
     </div>
 
     <!-- ── QUIZ ───────────────────────── -->
@@ -276,6 +280,16 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <div class="chal-sub" id="earSub" style="display:none"></div>
         <button class="snd-btn" id="eSndBtn" onclick="playEarQ()">🔊 Speel opnieuw</button>
         <div class="feed idle" id="eFeed">Druk 🔊 en kies hieronder</div>
+        <div class="vu-wrap" id="eVuWrap" style="display:none">
+          <span class="vu-lbl">🎙️</span>
+          <div class="vu-track"><div class="vu-bar" id="eVuBar"></div></div>
+          <span class="vu-note" id="eVuNote">—</span>
+        </div>
+        <div class="mic-row" style="margin-bottom:10px">
+          <button class="btn btn-ghost" id="eMicBtn" onclick="toggleMic()" style="font-size:0.8rem;padding:8px 16px">
+            <div class="mic-inner"><div class="mic-dot" id="eMicDot"></div><span id="eMicLbl">🎸 Antwoord via je bas</span></div>
+          </button>
+        </div>
         <div id="eGridWrap"></div>
         <button class="next-btn" id="eNext" onclick="nextEarQ()">Volgende →</button>
         <div class="hint" id="eHint"></div>
@@ -776,6 +790,9 @@ function nextEarQ(){
   document.getElementById('eHint').classList.remove('on');
   document.getElementById('eNext').classList.remove('on');
   buildEarGrid();
+  // Mic-antwoord alleen bij noten/octaven, niet bij intervallen
+  document.getElementById('eMicBtn').parentElement.style.display=(earSubMode==='interval')?'none':'flex';
+  if(micOn&&earSubMode!=='interval')setFeed('eFeed','listen','🎧 Luisteren... speel de noot die je hoort!');
   // labels
   if(earSubMode==='note'){
     document.getElementById('eChalLbl').textContent='WELKE NOOT HOOR JE?';
@@ -926,6 +943,22 @@ function nextMicQ(){
   setTimeout(playMNote,300);
 }
 async function toggleMic(){if(micOn)stopMic();else await startMic();}
+
+function updateMicUI(){
+  // Speel-panel
+  document.getElementById('micDot').classList.toggle('live',micOn);
+  document.getElementById('micLbl').textContent=micOn?'Microfoon uit':'Microfoon aan';
+  document.getElementById('vuWrap').style.display=micOn?'flex':'none';
+  // Gehoor-panel
+  document.getElementById('eMicDot').classList.toggle('live',micOn);
+  document.getElementById('eMicLbl').textContent=micOn?'🎸 Mic uit':'🎸 Antwoord via je bas';
+  document.getElementById('eVuWrap').style.display=micOn?'flex':'none';
+  if(!micOn){
+    document.getElementById('vuBar').style.width='0%';document.getElementById('vuNote').textContent='—';
+    document.getElementById('eVuBar').style.width='0%';document.getElementById('eVuNote').textContent='—';
+  }
+}
+
 async function startMic(){
   try{
     if(actx.state==='suspended')await actx.resume();
@@ -936,44 +969,60 @@ async function startMic(){
     actx.createMediaStreamSource(stream).connect(micGain);
     micGain.connect(analyser);
     micStream=stream;micOn=true;
-    document.getElementById('micDot').classList.add('live');
-    document.getElementById('micLbl').textContent='Microfoon uit';
-    document.getElementById('vuWrap').style.display='flex';
-    setFeed('mFeed','listen','🎧 Luisteren... speel de noot!');
+    updateMicUI();
+    if(mode==='mic')setFeed('mFeed','listen','🎧 Luisteren... speel de noot!');
+    if(mode==='ear')setFeed('eFeed','listen','🎧 Luisteren... speel de noot die je hoorde!');
     pitchTick=setInterval(detectPitch,120);vuLoop();
-    if(!curM)nextMicQ();
-  }catch(e){setFeed('mFeed','no','⚠️ Geen toegang — sta microfoon toe in instellingen');}
+    if(mode==='mic'&&!curM)nextMicQ();
+  }catch(e){
+    const fid=mode==='ear'?'eFeed':'mFeed';
+    setFeed(fid,'no','⚠️ Geen toegang — sta microfoon toe in instellingen');
+  }
 }
 function stopMic(){
   micOn=false;if(pitchTick){clearInterval(pitchTick);pitchTick=null;}
   if(vuRaf){cancelAnimationFrame(vuRaf);vuRaf=null;}
   if(micStream)micStream.getTracks().forEach(t=>t.stop());
-  document.getElementById('micDot').classList.remove('live');
-  document.getElementById('micLbl').textContent='Microfoon aan';
-  document.getElementById('vuWrap').style.display='none';
-  document.getElementById('vuBar').style.width='0%';
-  document.getElementById('vuNote').textContent='—';
-  setFeed('mFeed','idle','Zet microfoon aan ↓');
+  updateMicUI();
+  if(mode==='mic')setFeed('mFeed','idle','Zet microfoon aan ↓');
 }
 function vuLoop(){
   if(!micOn||!analyser)return;
   const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
-  document.getElementById('vuBar').style.width=Math.min(100,rms*1800)+'%';
+  const w=Math.min(100,rms*1800)+'%';
+  document.getElementById('vuBar').style.width=w;
+  document.getElementById('eVuBar').style.width=w;
   vuRaf=requestAnimationFrame(vuLoop);
 }
 function detectPitch(){
-  if(!analyser||!curM||micBusy)return;
+  if(!analyser||micBusy)return;
   const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
-  if(rms<0.0015){document.getElementById('vuNote').textContent='—';return;}
+  if(rms<0.0015){document.getElementById('vuNote').textContent='—';document.getElementById('eVuNote').textContent='—';return;}
   const freq=autoCorr(buf,actx.sampleRate);if(freq<25||freq>900)return;
   const midi=Math.round(12*Math.log2(freq/440)+69),det=noteName(midi);
   document.getElementById('vuNote').textContent=det;
-  if(det===curM.correctNote){
-    micBusy=true;mG++;mStr++;xp+=2;
-    setFeed('mFeed','ok',`✅ ${det}! Correct!`);drawNeck(null,null,curM,'ok',null);
-    if(mStr%3===0)toast(`🔥 ${mStr}× STREAK!`);updUI();chkLvl();setTimeout(nextMicQ,1200);
+  document.getElementById('eVuNote').textContent=det;
+
+  // Route naar juiste mode
+  if(mode==='mic'&&curM){
+    if(det===curM.correctNote){
+      micBusy=true;mG++;mStr++;xp+=2;
+      setFeed('mFeed','ok',`✅ ${det}! Correct!`);drawNeck(null,null,curM,'ok',null);
+      if(mStr%3===0)toast(`🔥 ${mStr}× STREAK!`);updUI();chkLvl();setTimeout(nextMicQ,1200);
+    }
+  } else if(mode==='ear'&&curE&&!eLocked&&(earSubMode==='note'||earSubMode==='octave')){
+    if(det===curE.note){
+      micBusy=true;eLocked=true;
+      eG++;eStr++;exp+=2; // extra XP voor antwoorden via je bas!
+      document.getElementById('earDisp').textContent=curE.note;
+      document.querySelectorAll('#eGridWrap .ab').forEach(b=>{b.disabled=true;if(b.textContent===curE.note)b.classList.add('ok');});
+      setFeed('eFeed','ok',`✅ ${det} gespeeld! Goed gehoord én gevonden!`);
+      if(eStr%3===0)toast(`👂 ${eStr}× STREAK!`);
+      updUI();chkEarLvl();
+      setTimeout(()=>{micBusy=false;nextEarQ();},1100);
+    }
   }
 }
 function autoCorr(buf,sr){
@@ -1085,6 +1134,37 @@ function closePat(){
 }
 
 // ══════════════════════════════════════════════════════
+// VOORTGANG OPSLAAN (localStorage)
+// ══════════════════════════════════════════════════════
+const SAVE_KEY='bassTrainerProgress_v1';
+function saveProgress(){
+  try{
+    localStorage.setItem(SAVE_KEY,JSON.stringify({
+      lvl,xp,elvl,exp,qG,qB,eG,eB,mG,mB,oG,oB,wc,ewc
+    }));
+  }catch(e){}
+}
+function loadProgress(){
+  try{
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(!d)return;
+    lvl=d.lvl||0;xp=d.xp||0;elvl=d.elvl||0;exp=d.exp||0;
+    qG=d.qG||0;qB=d.qB||0;eG=d.eG||0;eB=d.eB||0;
+    mG=d.mG||0;mB=d.mB||0;oG=d.oG||0;oB=d.oB||0;
+    wc=d.wc||{};ewc=d.ewc||{};
+  }catch(e){}
+}
+function resetProgress(){
+  if(!confirm('Weet je zeker dat je alle voortgang wilt wissen?'))return;
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+  lvl=0;xp=0;elvl=0;exp=0;
+  qG=0;qB=0;qStr=0;eG=0;eB=0;eStr=0;mG=0;mB=0;mStr=0;oG=0;oB=0;oStr=0;
+  wc={};ewc={};curQ=null;curE=null;curM=null;curO=null;
+  updUI();drawNeck(null,null,null,null,null);
+  toast('🔄 Voortgang gewist');
+}
+
+// ══════════════════════════════════════════════════════
 // SCORE / LEVEL UP
 // ══════════════════════════════════════════════════════
 function updUI(){
@@ -1097,6 +1177,7 @@ function updUI(){
   document.getElementById('xpTxt').textContent=xp+' XP';
   document.getElementById('progLabel').textContent=L.name;
   document.getElementById('lvlChip').textContent='LVL '+(lvl+1);
+  saveProgress();
 }
 function chkLvl(){
   const L=LEVELS[lvl];
@@ -1134,6 +1215,7 @@ function setMode(m){
 // ══════════════════════════════════════════════════════
 function startApp(){
   unlockAudio();
+  loadProgress();
   document.getElementById('startOverlay').style.display='none';
   document.getElementById('app').style.display='flex';
   buildPatternsPanel();
