@@ -38,7 +38,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
 .tab-item.active{color:var(--accent);}
 
 /* NECK */
-.neck-wrap{background:linear-gradient(135deg,#1a1008,#2a1a0a,#1a1008);border-radius:12px;margin-bottom:10px;border:1px solid #3d2410;position:relative;padding:12px 8px;overflow:hidden;}
+.neck-wrap{background:linear-gradient(135deg,#1a1008,#2a1a0a,#1a1008);border-radius:12px;margin-bottom:10px;border:1px solid #3d2410;position:sticky;top:0;z-index:60;padding:12px 8px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.6);}
+@media(max-width:600px){
+  .neck-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #neckSvg{min-width:640px;width:640px;}
+}
 .neck-wrap::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);border-radius:12px 12px 0 0;opacity:0.5;}
 #neckSvg{display:block;width:100%;height:auto;}
 
@@ -332,12 +336,26 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
     <!-- ── PATRONEN ───────────────────── -->
     <div id="pPatterns" class="panel">
 
+      <div class="card"><h3>📖 Wat betekenen de letters?</h3>
+        <p>
+        <strong style="color:var(--accent)">R</strong> = grondtoon (root) — de noot waar alles om draait<br>
+        <strong>m2 / M2</strong> = kleine / grote secunde (1 / 2 frets boven R)<br>
+        <strong>m3 / M3</strong> = kleine / grote terts (3 / 4 frets) — bepaalt mineur of majeur<br>
+        <strong>P4 / P5</strong> = reine kwart / kwint (5 / 7 frets) — de stevige steunpilaren<br>
+        <strong>TT</strong> = tritonus (6 frets) — de spannende "blue note"<br>
+        <strong>m6 / M6</strong> = kleine / grote sext (8 / 9 frets)<br>
+        <strong>m7 / M7</strong> = kleine / grote septiem (10 / 11 frets) — blues vs. jazz<br>
+        <strong>8</strong> = octaaf (12 frets) — zelfde noot, hoger<br><br>
+        <em>Het getal achter de + in de patroon-kaartjes = aantal halve tonen (frets) boven de grondtoon.</em></p>
+      </div>
+
       <!-- Pattern detail (shown when selected) -->
       <div class="pat-detail" id="patDetail">
         <div class="pat-detail-title" id="pdTitle">—</div>
         <div class="pat-detail-sub" id="pdDesc">—</div>
         <div class="root-selector" id="rootSelector"></div>
         <div class="pat-positions" id="pdPositions"></div>
+        <p style="font-size:0.74rem;color:var(--muted);margin-top:8px">🟠 oranje = grondtoon (R) &nbsp;·&nbsp; 🔵 blauw = patroon-noot</p>
         <button class="btn btn-ghost" onclick="closePat()" style="margin-top:10px;font-size:0.8rem;padding:7px 14px">✕ Sluiten</button>
       </div>
 
@@ -566,7 +584,8 @@ function drawNeck(hl,tgt,fb,fbType,extraCells){
     svg.appendChild(mk('line',{x1:LP-6,y1:y,x2:VW-RP,y2:y,stroke:SCOLS[s],'stroke-width':th}));
     svg.appendChild(mk('text',{x:LP-14,y:y+5,'text-anchor':'middle','font-size':'12',fill:'#e8a923','font-family':'Bebas Neue,cursive'},SNAMES[s]));
   }
-  const hideOnTgt=(mode==='quiz'||mode==='mic');
+  // In trainings-modes (quiz/ear/mic/octave): alleen open-snaar noten tonen
+  const trainingMode=(mode==='quiz'||mode==='mic'||mode==='ear'||mode==='octave');
   const extraMap={};
   if(extraCells)extraCells.forEach(c=>extraMap[`${c.string}_${c.fret}`]=c);
 
@@ -590,8 +609,14 @@ function drawNeck(hl,tgt,fb,fbType,extraCells){
       const c=mk('circle',{cx:x,cy:y,r,fill,opacity:op,stroke:(isTgt||isOTgt)?fill:'none','stroke-width':'2'});
       if(isTgt||isOTgt){const a=mk('animate',{attributeName:'opacity',values:'1;0.3;1',dur:'1.1s',repeatCount:'indefinite'});c.appendChild(a);}
       g.appendChild(c);
-      const showLabel=isHL||isFB||extra||(!(hideOnTgt&&isTgt)&&!(mode==='octave'&&!isFB));
-      if(showLabel||mode==='learn'||mode==='patterns')
+      let showLabel;
+      if(trainingMode){
+        // alleen: open snaren (fret 0), feedback-onthulling, of pattern-extra
+        showLabel=(f===0)||isFB||extra;
+      }else{
+        showLabel=true; // learn & patterns: alles tonen
+      }
+      if(showLabel)
         g.appendChild(mk('text',{x,y:y+4,'text-anchor':'middle','font-size':'9',fill:extra?tf:tf,'font-weight':'700','font-family':'DM Sans,sans-serif','pointer-events':'none'},extra?.label||note));
       g.addEventListener('click',()=>dotClick(s,f,note));
       svg.appendChild(g);
@@ -743,6 +768,7 @@ function genEarQ(){
 
 function nextEarQ(){
   eLocked=false;curE=genEarQ();
+  drawNeck(null,null,null,null,null); // schone hals, geen oude targets
   document.getElementById('earDisp').textContent='?';
   document.getElementById('earDisp2').style.display='none';
   document.getElementById('earSub').style.display='none';
@@ -903,9 +929,12 @@ async function toggleMic(){if(micOn)stopMic();else await startMic();}
 async function startMic(){
   try{
     if(actx.state==='suspended')await actx.resume();
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false},video:false});
-    analyser=actx.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=0.6;
-    actx.createMediaStreamSource(stream).connect(analyser);
+    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true},video:false});
+    analyser=actx.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=0.5;
+    // Gain-boost zodat zachte bas-signalen ook gehoord worden
+    const micGain=actx.createGain();micGain.gain.value=4.0;
+    actx.createMediaStreamSource(stream).connect(micGain);
+    micGain.connect(analyser);
     micStream=stream;micOn=true;
     document.getElementById('micDot').classList.add('live');
     document.getElementById('micLbl').textContent='Microfoon uit';
@@ -930,14 +959,14 @@ function vuLoop(){
   if(!micOn||!analyser)return;
   const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
-  document.getElementById('vuBar').style.width=Math.min(100,rms*600)+'%';
+  document.getElementById('vuBar').style.width=Math.min(100,rms*1800)+'%';
   vuRaf=requestAnimationFrame(vuLoop);
 }
 function detectPitch(){
   if(!analyser||!curM||micBusy)return;
   const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
   let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
-  if(rms<0.005){document.getElementById('vuNote').textContent='—';return;}
+  if(rms<0.0015){document.getElementById('vuNote').textContent='—';return;}
   const freq=autoCorr(buf,actx.sampleRate);if(freq<25||freq>900)return;
   const midi=Math.round(12*Math.log2(freq/440)+69),det=noteName(midi);
   document.getElementById('vuNote').textContent=det;
@@ -955,7 +984,7 @@ function autoCorr(buf,sr){
     for(let i=0;i<HALF;i++){r+=buf[i]*buf[i+lag];n1+=buf[i]*buf[i];n2+=buf[i+lag]*buf[i+lag];}
     const nr=r/Math.sqrt(n1*n2+1e-9);if(nr>bR){bR=nr;bO=lag;}
   }
-  return bR>0.80?sr/bO:-1;
+  return bR>0.72?sr/bO:-1;
 }
 
 // ══════════════════════════════════════════════════════
@@ -1020,10 +1049,7 @@ function openPat(pat,type){
 
 function showPatOnNeck(){
   if(!activePat)return;
-  // Find all occurrences of pattern notes on fretboard
-  const rootNote=NOTES[patRoot];
   const cells=[];
-  const COLORS=['#e8a923','#3fcf6e','#4488ff','#a855f7','#f97316','#22d3ee','#e84040','#fbbf24'];
   for(let s=0;s<4;s++){
     for(let f=0;f<=12;f++){
       const midi=OPEN_MIDI[s]+f;
@@ -1031,8 +1057,9 @@ function showPatOnNeck(){
       const relIdx=((noteIdx-patRoot)+12)%12;
       const posInPat=activePat.intervals.indexOf(relIdx);
       if(posInPat!==-1){
-        cells.push({string:s,fret:f,color:posInPat===0?'#e8a923':COLORS[posInPat]||'#4488ff',
-          label:posInPat===0?'R':activePat.intervals[posInPat]===0?'R':noteName(midi)});
+        const isRoot=relIdx===0;
+        cells.push({string:s,fret:f,color:isRoot?'#e8a923':'#4488ff',
+          label:isRoot?'R':noteName(midi)});
       }
     }
   }
