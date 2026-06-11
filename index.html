@@ -221,6 +221,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <strong>Octaaf:</strong> 2 snaren lager + 2 frets hoger = zelfde noot<br>
         <strong>Fret 12:</strong> gelijk aan open snaar, een octaaf hoger</p>
       </div>
+      <div class="card"><h3>📊 Statistieken</h3>
+        <p id="statsText" style="margin-bottom:10px">Nog geen oefendata...</p>
+        <button class="btn btn-ghost" id="heatBtn" onclick="toggleHeatmap()" style="font-size:0.8rem;padding:8px 16px">🌡 Beheersing tonen</button>
+        <p style="font-size:0.72rem;color:var(--muted);margin-top:8px">🟢 goed beheerst · 🟠 1× fout · 🔴 vaak fout — op basis van Quiz &amp; Speel</p>
+      </div>
       <div class="card"><h3>⚙️ Voortgang</h3>
         <p style="margin-bottom:10px">Je voortgang wordt automatisch opgeslagen op dit apparaat.</p>
         <button class="btn btn-ghost" onclick="resetProgress()" style="font-size:0.8rem;padding:8px 16px">🔄 Voortgang wissen</button>
@@ -234,8 +239,13 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <div class="sc"><div class="sc-val" id="qB">0</div><div class="sc-lbl">❌ Fout</div></div>
         <div class="sc"><div class="sc-val" id="qS">0</div><div class="sc-lbl">🔥 Streak</div></div>
       </div>
+      <div class="tag-strip" id="quizModeTabs">
+        <button class="tag active" onclick="setQuizMode('note')">🎵 Noten</button>
+        <button class="tag" onclick="setQuizMode('scale')">🎼 Toonladders</button>
+      </div>
+      <div class="tag-strip" id="scaleSelect" style="display:none"></div>
       <!-- Timer -->
-      <div class="timer-wrap">
+      <div class="timer-wrap" id="timerWrap">
         <div class="timer-arc-wrap">
           <svg width="52" height="52" viewBox="0 0 52 52">
             <circle cx="26" cy="26" r="22" fill="none" stroke="#1e1e23" stroke-width="4"/>
@@ -255,7 +265,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <button class="snd-btn" id="qSndBtn" onclick="playQNote()">🔊 Hoor de noot</button>
         <div class="feed idle" id="qFeed">Kies hieronder ↓</div>
         <div class="ag4" id="qGrid"></div>
-        <button class="next-btn" id="qNext" onclick="nextQ()">Volgende →</button>
+        <button class="next-btn" id="qNext" onclick="nextQuizQ()">Volgende →</button>
         <div class="hint" id="qHint"></div>
       </div>
     </div>
@@ -309,6 +319,7 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <button class="tag" onclick="setOctMode('kwart')">4 Kwart</button>
         <button class="tag" onclick="setOctMode('terts')">3 Terts</button>
         <button class="tag" onclick="setOctMode('walk')">🚶 Walk</button>
+        <button class="tag" onclick="setOctMode('awalk')">🎷 Akk.walk</button>
       </div>
       <div class="quiz-card">
         <div class="chal-lbl" id="oChalLbl">VIND HET OCTAAF</div>
@@ -325,7 +336,8 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <strong>Kwint (5):</strong> 1 snaar hoger + 2 frets hoger<br>
         <strong>Kwart (4):</strong> 1 snaar hoger, zelfde fret<br>
         <strong>Grote terts (3):</strong> 1 snaar hoger, 1 fret lager<br>
-        <strong>Walking:</strong> verbind twee noten chromatisch — elke fret is een stap. Dé manier om soepel tussen akkoorden te bewegen!</p>
+        <strong>Walking:</strong> verbind twee noten chromatisch — elke fret is een stap<br>
+        <strong>Akkoord-walk:</strong> loop via 2–3–4 naar het IV-akkoord, of via 2–3–♯4–5 naar het V-akkoord. Dé jazz/blues-manier om akkoordwisselingen aan te kondigen!</p>
       </div>
     </div>
 
@@ -336,24 +348,68 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <div class="sc"><div class="sc-val" id="mB">0</div><div class="sc-lbl">❌ Fout</div></div>
         <div class="sc"><div class="sc-val" id="mS">0</div><div class="sc-lbl">🔥 Streak</div></div>
       </div>
-      <div class="quiz-card">
-        <div class="chal-lbl">SPEEL DEZE NOOT OP JE BAS</div>
-        <div class="chal-note" id="mNote">—</div>
-        <div class="chal-sub" id="mSub">snaar <strong>—</strong> · fret <strong>—</strong></div>
-        <button class="snd-btn" id="mSndBtn" onclick="playMNote()">🔊 Hoor de noot</button>
-        <div class="feed idle" id="mFeed">Zet microfoon aan ↓</div>
-        <div class="vu-wrap" id="vuWrap" style="display:none">
+      <div class="tag-strip" id="micModeTabs">
+        <button class="tag active" onclick="setMicMode('noot')">🎵 Noot</button>
+        <button class="tag" onclick="setMicMode('ritme')">🥁 Ritme</button>
+        <button class="tag" onclick="setMicMode('prog')">🎶 Progressie</button>
+      </div>
+      <!-- Gedeelde mic-bediening -->
+      <div class="card" style="padding:10px 14px">
+        <div class="vu-wrap" id="vuWrap" style="display:none;margin-bottom:8px">
           <span class="vu-lbl">🎙️</span>
           <div class="vu-track"><div class="vu-bar" id="vuBar"></div></div>
           <span class="vu-note" id="vuNote">—</span>
         </div>
-        <div class="mic-row">
+        <div class="mic-row" style="margin:0">
           <button class="btn btn-primary" id="micBtn" onclick="toggleMic()">
             <div class="mic-inner"><div class="mic-dot" id="micDot"></div><span id="micLbl">Microfoon aan</span></div>
           </button>
+        </div>
+      </div>
+      <!-- NOOT submode -->
+      <div class="quiz-card" id="mNoteCard">
+        <div class="chal-lbl">SPEEL DEZE NOOT OP JE BAS</div>
+        <div class="chal-note" id="mNote">—</div>
+        <div class="chal-sub" id="mSub">snaar <strong>—</strong> · fret <strong>—</strong></div>
+        <button class="snd-btn" id="mSndBtn" onclick="playMNote()">🔊 Hoor de noot</button>
+        <div class="feed idle" id="mFeed">Zet microfoon aan ↑</div>
+        <div class="mic-row">
           <button class="btn btn-ghost" onclick="nextMicQ()">Overslaan →</button>
         </div>
         <div class="hint" id="mHint"></div>
+      </div>
+      <!-- RITME submode -->
+      <div class="quiz-card" id="mRitmeCard" style="display:none">
+        <div class="chal-lbl">SPEEL OP DE TEL</div>
+        <div class="chal-note" id="rNote">—</div>
+        <div class="chal-sub">Speel deze noot precies óp de klik — waar op de hals maakt niet uit</div>
+        <div id="beatDots" style="display:flex;gap:10px;justify-content:center;margin-bottom:12px"></div>
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px">
+          <span style="font-size:0.78rem;color:var(--muted)">Tempo</span>
+          <input type="range" min="50" max="140" value="80" id="bpmSlider" oninput="setBpm(this.value)" style="flex:1;max-width:180px">
+          <strong id="bpmVal" style="font-family:'Bebas Neue',cursive;font-size:1.2rem;color:var(--accent);min-width:34px">80</strong>
+        </div>
+        <div class="feed idle" id="rFeed">Start de metronoom + zet mic aan ↑</div>
+        <div class="mic-row">
+          <button class="btn btn-primary" id="metroBtn" onclick="toggleMetro()">▶ Metronoom</button>
+        </div>
+      </div>
+      <!-- PROGRESSIE submode -->
+      <div class="quiz-card" id="mProgCard" style="display:none">
+        <div class="chal-lbl">VOLG DE AKKOORDEN</div>
+        <div class="chal-note" id="pgChord">—</div>
+        <div class="chal-sub">Speel de grondtoon ergens tijdens elke maat (4 tellen)</div>
+        <div id="progSeq" style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin-bottom:12px"></div>
+        <div class="tag-strip" id="progSelect" style="justify-content:center"></div>
+        <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:10px">
+          <span style="font-size:0.78rem;color:var(--muted)">Tempo</span>
+          <input type="range" min="50" max="140" value="70" id="bpmSlider2" oninput="setBpm(this.value)" style="flex:1;max-width:180px">
+          <strong id="bpmVal2" style="font-family:'Bebas Neue',cursive;font-size:1.2rem;color:var(--accent);min-width:34px">70</strong>
+        </div>
+        <div class="feed idle" id="pgFeed">Kies een progressie en start ↓</div>
+        <div class="mic-row">
+          <button class="btn btn-primary" id="metroBtn2" onclick="toggleMetro()">▶ Start</button>
+        </div>
       </div>
     </div>
 
@@ -378,8 +434,18 @@ html,body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-seri
         <div class="pat-detail-title" id="pdTitle">—</div>
         <div class="pat-detail-sub" id="pdDesc">—</div>
         <div class="root-selector" id="rootSelector"></div>
+        <div class="tag-strip" style="margin-bottom:6px">
+          <button class="tag active" id="lblNote" onclick="setPatLabels('note')">🎵 Noten</button>
+          <button class="tag" id="lblInt" onclick="setPatLabels('interval')">📐 Intervallen</button>
+        </div>
         <div class="pat-positions" id="pdPositions"></div>
         <div id="pdLegend" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+          <button class="btn btn-primary" id="grooveBtn" onclick="toggleGroove()" style="font-size:0.82rem;padding:9px 16px;white-space:nowrap">▶ Loop</button>
+          <span style="font-size:0.74rem;color:var(--muted)">Tempo</span>
+          <input type="range" min="50" max="160" value="90" oninput="grooveBpmVal=+this.value;document.getElementById('gBpmTxt').textContent=this.value" style="flex:1">
+          <strong id="gBpmTxt" style="font-family:'Bebas Neue',cursive;font-size:1.1rem;color:var(--accent);min-width:30px">90</strong>
+        </div>
         <button class="btn btn-ghost" onclick="closePat()" style="margin-top:10px;font-size:0.8rem;padding:7px 14px">✕ Sluiten</button>
       </div>
 
@@ -505,6 +571,11 @@ let qLocked=false,eLocked=false,oLocked=false;
 let hlCell=null;
 let actx=null,analyser=null,micStream=null,micOn=false,pitchTick=null,micBusy=false,vuRaf=null;
 let suppressUntil=0; // mic-detectie pauzeren terwijl de app zelf geluid afspeelt
+let cc={};            // correct-counts per cel (voor heatmap)
+let practiceDays={};  // oefendagen voor dagstreak
+let quizSubMode='note';
+let micSubMode='noot';
+let heatmapOn=false;
 let timerOn=false,timerSec=10,timerInterval=null,timerRemaining=0;
 let earSubMode='note';
 let patRoot=0,activePat=null;
@@ -621,13 +692,13 @@ function drawNeck(hl,tgt,fb,fbType,extraCells){
       const extra=extraMap[`${s}_${f}`];
       const inLvl=L.strings.includes(s)&&L.frets.includes(f);
       let fill='#2a2038',op=extra?'1':(inLvl?'0.85':'0.22'),tf='#aaa',r=10;
-      if(extra){fill=extra.color||'#4488ff';tf='#fff';r=12;}
+      if(extra){fill=extra.color||'#4488ff';tf='#fff';r=extra.big?16:12;}
       if(isHL){fill='#e8a923';tf='#000';r=13;op='1';}
       if(isTgt){fill='#4488ff';tf='#fff';r=13;op='1';}
       if(isOTgt){fill='#a855f7';tf='#fff';r=13;op='1';}
       if(isFB){fill=fbType==='ok'?'#3fcf6e':'#e84040';tf='#fff';r=14;op='1';}
       const g=mk('g',{style:'cursor:pointer'});
-      const c=mk('circle',{cx:x,cy:y,r,fill,opacity:op,stroke:(isTgt||isOTgt)?fill:'none','stroke-width':'2'});
+      const c=mk('circle',{cx:x,cy:y,r,fill,opacity:op,stroke:(extra&&extra.big)?'#ffffff':((isTgt||isOTgt)?fill:'none'),'stroke-width':(extra&&extra.big)?'3':'2'});
       if(isTgt||isOTgt){const a=mk('animate',{attributeName:'opacity',values:'1;0.3;1',dur:'1.1s',repeatCount:'indefinite'});c.appendChild(a);}
       g.appendChild(c);
       let showLabel;
@@ -652,6 +723,8 @@ function dotClick(s,f,note){
     document.getElementById('learnInfo').innerHTML=`<strong style="font-size:1.5em;color:var(--accent)">${note}</strong> &nbsp;—&nbsp; ${SNAMES[s]}-snaar, fret ${f===0?'open':f}<br><span style="color:var(--muted);font-size:0.8em">${midiFreq(OPEN_MIDI[s]+f).toFixed(1)} Hz</span>`;
   } else if(mode==='octave'&&curO&&!oLocked){
     checkOctaveAnswer(s,f);
+  } else if(mode==='quiz'&&quizSubMode==='scale'&&curQ&&curQ.type==='scale'&&!qLocked){
+    checkScaleAnswer(s,f);
   }
 }
 
@@ -744,6 +817,7 @@ function submitQ(chosen,btn){
   drawNeck(null,null,curQ,ok?'ok':'no',null);
   if(ok){
     qG++;qStr++;xp++;wc[curQ.key]=Math.max(0,(wc[curQ.key]||0)-1);
+    cc[curQ.key]=(cc[curQ.key]||0)+1;
     setFeed('qFeed','ok','✅ Correct!');if(qStr%3===0)toast(`🔥 ${qStr}× STREAK!`);
     updUI();chkLvl();setTimeout(nextQ,700);
   }else{
@@ -752,6 +826,81 @@ function submitQ(chosen,btn){
     setTimeout(()=>playNote(curQ.midi),300);
     document.getElementById('qNext').classList.add('on');
     if((wc[curQ.key]||0)>=2){const h=document.getElementById('qHint');h.innerHTML=`💡 ${SNAMES[curQ.string]}-snaar · fret ${curQ.fret===0?'open':curQ.fret} = <strong>${curQ.correctNote}</strong>`;h.classList.add('on');}
+    updUI();
+  }
+}
+
+// ── TOONLADDER-QUIZ (submode) ──
+let selScale=-1; // -1 = alle ladders
+
+function setQuizMode(m){
+  quizSubMode=m;
+  document.querySelectorAll('#quizModeTabs .tag').forEach((t,i)=>t.classList.toggle('active',['note','scale'][i]===m));
+  document.getElementById('timerWrap').style.display=(m==='note')?'flex':'none';
+  document.getElementById('scaleSelect').style.display=(m==='scale')?'flex':'none';
+  if(m==='scale'){buildScaleSelect();nextScaleQ();}else nextQ();
+}
+function nextQuizQ(){quizSubMode==='scale'?nextScaleQ():nextQ();}
+
+function buildScaleSelect(){
+  const wrap=document.getElementById('scaleSelect');
+  if(wrap.children.length)return; // al gebouwd
+  const all=document.createElement('button');
+  all.className='tag'+(selScale===-1?' active':'');
+  all.textContent='🎲 Alle';
+  all.onclick=()=>{selScale=-1;refreshScaleSelect();nextScaleQ();};
+  wrap.appendChild(all);
+  SCALES.forEach((sc,i)=>{
+    const b=document.createElement('button');
+    b.className='tag'+(selScale===i?' active':'');
+    b.textContent=sc.name;
+    b.onclick=()=>{selScale=i;refreshScaleSelect();nextScaleQ();};
+    wrap.appendChild(b);
+  });
+}
+function refreshScaleSelect(){
+  const wrap=document.getElementById('scaleSelect');
+  [...wrap.children].forEach((b,i)=>b.classList.toggle('active',(i===0&&selScale===-1)||(i-1===selScale)));
+}
+
+function nextScaleQ(){
+  clearTimerVars();qLocked=false;
+  const sc=selScale>=0?SCALES[selScale]:SCALES[Math.floor(Math.random()*SCALES.length)];
+  const root=Math.floor(Math.random()*12);
+  const degIdx=1+Math.floor(Math.random()*(sc.intervals.length-1));
+  const iv=sc.intervals[degIdx];
+  curQ={type:'scale',scale:sc,root,degIdx,iv,correctNote:NOTES[(root+iv)%12],key:'sc'};
+  document.getElementById('qNote').innerHTML=`<span style="font-size:0.5em;line-height:1.2">${NOTES[root]}<br>${sc.name}</span>`;
+  document.getElementById('qSub').innerHTML=`Tik de <strong>${degIdx+1}e noot</strong> van deze ladder aan op de hals ↑`;
+  setFeed('qFeed','idle','Tik op de hals ↑');
+  document.getElementById('qGrid').innerHTML='';
+  document.getElementById('qNext').classList.remove('on');
+  document.getElementById('qHint').classList.remove('on');
+  drawNeck(null,null,null,null,null);
+  // Grondtoon als referentie laten horen
+  setTimeout(()=>playNote(40+(((root-4)+12)%12),1.0),300);
+}
+
+function checkScaleAnswer(s,f){
+  if(qLocked||!curQ||curQ.type!=='scale')return;
+  const note=FB[s][f].note;
+  const ok=note===curQ.correctNote;
+  qLocked=true;
+  playNote(OPEN_MIDI[s]+f,0.8);
+  if(ok){
+    qG++;qStr++;xp+=2;
+    setFeed('qFeed','ok',`✅ ${note} — de ${curQ.degIdx+1}e van ${NOTES[curQ.root]} ${curQ.scale.name}!`);
+    drawNeck(null,null,{string:s,fret:f},'ok',null);
+    if(qStr%3===0)toast(`🔥 ${qStr}× STREAK!`);
+    updUI();chkLvl();setTimeout(nextScaleQ,900);
+  }else{
+    qB++;qStr=0;
+    const cells=[];
+    for(let ss=0;ss<4;ss++)for(let ff=0;ff<=12;ff++)
+      if(FB[ss][ff].note===curQ.correctNote)cells.push({string:ss,fret:ff,color:'#3fcf6e',label:curQ.correctNote});
+    drawNeck(null,null,{string:s,fret:f},'no',cells);
+    setFeed('qFeed','no',`❌ Het was <strong>${curQ.correctNote}</strong> — alle posities groen gemarkeerd`);
+    document.getElementById('qNext').classList.add('on');
     updUI();
   }
 }
@@ -902,15 +1051,14 @@ const JUMPS={
 function setOctMode(m){
   octSubMode=m;
   document.querySelectorAll('#octModeTabs .tag').forEach((t,i)=>
-    t.classList.toggle('active',['octave','kwint','kwart','terts','walk'][i]===m));
+    t.classList.toggle('active',['octave','kwint','kwart','terts','walk','awalk'][i]===m));
   nextOctaveQ();
 }
 
 function nextOctaveQ(){
   oLocked=false;octaveTarget=null;
-  if(octSubMode==='walk'){
-    nextWalkQ();return;
-  }
+  if(octSubMode==='walk'){nextWalkQ();return;}
+  if(octSubMode==='awalk'){nextAWalkQ();return;}
   const J=JUMPS[octSubMode];
   // Kies een startcel waarvan het doel binnen de hals valt
   const opts=[];
@@ -933,25 +1081,52 @@ function nextOctaveQ(){
   setTimeout(playOctaveQ,300);
 }
 
-// ── WALKING ──
+// ── WALKING (chromatisch, één snaar) ──
 function nextWalkQ(){
-  // Kies snaar, startfret, richting, aantal tussennoten (1-3)
-  const n=1+Math.floor(Math.random()*3); // tussennoten
+  const n=1+Math.floor(Math.random()*3);
   const dir=Math.random()<0.5?1:-1;
-  const span=n+1; // totaal frets verschil
+  const span=n+1;
   const s=Math.floor(Math.random()*4);
   const validStarts=[];
   for(let f=0;f<=12;f++){const ft=f+span*dir;if(ft>=0&&ft<=12)validStarts.push(f);}
   const f0=validStarts[Math.floor(Math.random()*validStarts.length)];
   const ft=f0+span*dir;
-  const seq=[];
-  for(let i=1;i<=span;i++)seq.push(f0+i*dir);
-  curO={type:'walk',string:s,fret:f0,startFret:f0,targetFret:ft,dir,seq,idx:0,
+  const seqCells=[];
+  for(let i=1;i<=span;i++)seqCells.push({string:s,fret:f0+i*dir});
+  curO={type:'walk',string:s,fret:f0,seqCells,idx:0,
     startNote:FB[s][f0].note,targetNote:FB[s][ft].note};
   document.getElementById('oChalLbl').textContent='WALKING — VERBIND DE NOTEN';
   document.getElementById('oNote').innerHTML=`${curO.startNote} <span style="color:var(--muted);font-size:0.5em">${dir>0?'⟶':'⟵'}</span> ${curO.targetNote}`;
   document.getElementById('oSub').innerHTML=`${SNAMES[s]}-snaar · chromatisch ${dir>0?'omhoog':'omlaag'} · <strong>${n} tussennoot${n>1?'en':''}</strong>`;
-  setFeed('oFeed','idle',`Tik de ${n+1} stappen één voor één aan, eindig op ${curO.targetNote} ↑`);
+  setFeed('oFeed','idle',`Tik de ${span} stappen één voor één aan, eindig op ${curO.targetNote} ↑`);
+  document.getElementById('oHint').classList.remove('on');
+  document.getElementById('oNext').classList.remove('on');
+  drawNeck(null,curO,null,null,null);
+  setTimeout(playOctaveQ,300);
+}
+
+// ── AKKOORD-WALK (over snaren, jazz-stijl) ──
+function nextAWalkQ(){
+  oLocked=false;
+  const toV=Math.random()<0.5;
+  const s=Math.floor(Math.random()*3);     // s+1 moet bestaan
+  const f=Math.floor(Math.random()*9);     // f+4 <= 12
+  let seqCells,targetCell,desc,via;
+  if(!toV){ // naar de IV (kwart) — loop 1-2-3-4
+    seqCells=[{string:s,fret:f+2},{string:s,fret:f+4},{string:s+1,fret:f}];
+    targetCell={string:s+1,fret:f};
+    desc='kwart (IV-akkoord)';via='2 – 3 – 4';
+  }else{    // naar de V (kwint) — loop 1-2-3-♯4-5 met chromatische approach
+    seqCells=[{string:s,fret:f+2},{string:s,fret:f+4},{string:s+1,fret:f+1},{string:s+1,fret:f+2}];
+    targetCell={string:s+1,fret:f+2};
+    desc='kwint (V-akkoord)';via='2 – 3 – ♯4 – 5';
+  }
+  curO={type:'walk',string:s,fret:f,seqCells,idx:0,
+    startNote:FB[s][f].note,targetNote:FB[targetCell.string][targetCell.fret].note};
+  document.getElementById('oChalLbl').textContent='AKKOORD-WALK';
+  document.getElementById('oNote').innerHTML=`${curO.startNote} <span style="color:var(--muted);font-size:0.5em">⟶</span> ${curO.targetNote}`;
+  document.getElementById('oSub').innerHTML=`Loop via de toonladder naar de <strong>${desc}</strong> · stappen: <strong>${via}</strong>`;
+  setFeed('oFeed','idle',`Start: ${curO.startNote} op ${SNAMES[s]}-snaar fret ${f===0?'open':f}. Tik de ${seqCells.length} stappen ↑`);
   document.getElementById('oHint').classList.remove('on');
   document.getElementById('oNext').classList.remove('on');
   drawNeck(null,curO,null,null,null);
@@ -962,9 +1137,8 @@ function playOctaveQ(){
   if(!curO)return;
   flashSnd('oSndBtn');
   if(curO.type==='walk'){
-    // Speel hele loop: start + alle stappen
-    playNote(OPEN_MIDI[curO.string]+curO.startFret,0.6);
-    curO.seq.forEach((f,i)=>playNote(OPEN_MIDI[curO.string]+f,0.6,(i+1)*0.45));
+    playNote(OPEN_MIDI[curO.string]+curO.fret,0.6);
+    curO.seqCells.forEach((c,i)=>playNote(OPEN_MIDI[c.string]+c.fret,0.6,(i+1)*0.45));
   }else{
     playNote(curO.midi);
     setTimeout(()=>playNote(OPEN_MIDI[curO.targetString]+curO.targetFret),600);
@@ -974,29 +1148,29 @@ function playOctaveQ(){
 function checkOctaveAnswer(s,f){
   if(!curO||oLocked)return;
   if(curO.type==='walk'){
-    const expectedFret=curO.seq[curO.idx];
-    const ok=(s===curO.string&&f===expectedFret);
+    const exp=curO.seqCells[curO.idx];
+    const ok=(s===exp.string&&f===exp.fret);
     if(ok){
       playNote(OPEN_MIDI[s]+f,0.7);
       curO.idx++;
-      // Toon voortgang: getikte stappen groen
-      const done=curO.seq.slice(0,curO.idx).map(fr=>({string:curO.string,fret:fr,color:'#3fcf6e',label:FB[curO.string][fr].note}));
+      const done=curO.seqCells.slice(0,curO.idx).map(c=>({string:c.string,fret:c.fret,color:'#3fcf6e',label:FB[c.string][c.fret].note}));
       drawNeck(null,curO,null,null,done);
-      if(curO.idx>=curO.seq.length){
+      if(curO.idx>=curO.seqCells.length){
         oLocked=true;oG++;oStr++;xp+=2;
         setFeed('oFeed','ok',`✅ Perfecte walk van ${curO.startNote} naar ${curO.targetNote}!`);
         if(oStr%3===0)toast(`🚶 ${oStr}× STREAK!`);
-        updUI();chkLvl();setTimeout(nextWalkQ,1100);
+        updUI();chkLvl();
+        setTimeout(()=>{octSubMode==='awalk'?nextAWalkQ():nextWalkQ();},1100);
       }else{
-        setFeed('oFeed','listen',`👍 Stap ${curO.idx}/${curO.seq.length} — ga door!`);
+        setFeed('oFeed','listen',`👍 Stap ${curO.idx}/${curO.seqCells.length} — ga door!`);
       }
     }else{
       oLocked=true;oB++;oStr=0;
-      const path=curO.seq.map(fr=>({string:curO.string,fret:fr,color:'#3fcf6e',label:FB[curO.string][fr].note}));
+      const path=curO.seqCells.map(c=>({string:c.string,fret:c.fret,color:'#3fcf6e',label:FB[c.string][c.fret].note}));
       drawNeck(null,curO,{string:s,fret:f},'no',path);
       setFeed('oFeed','no',`❌ Niet die — het juiste pad is nu groen gemarkeerd`);
       const h=document.getElementById('oHint');
-      h.innerHTML=`💡 Chromatisch lopen = elke fret is één stap. Van ${curO.startNote} (fret ${curO.startFret}) ${curO.dir>0?'omhoog':'omlaag'} naar ${curO.targetNote} (fret ${curO.targetFret}).`;
+      h.innerHTML=`💡 Volg de groene stippen van ${curO.startNote} naar ${curO.targetNote}, in volgorde.`;
       h.classList.add('on');
       document.getElementById('oNext').classList.add('on');
       updUI();
@@ -1024,6 +1198,165 @@ function checkOctaveAnswer(s,f){
     h.classList.add('on');document.getElementById('oNext').classList.add('on');
     updUI();
   }
+}
+
+// ══════════════════════════════════════════════════════
+// METRONOOM / RITME / PROGRESSIE
+// ══════════════════════════════════════════════════════
+let metroOn=false,bpm=80,metroTO=null,beatStamps=[],beatNum=-1;
+let rTargetNote='A',rHitCooldown=false;
+const PROGRESSIONS=[
+  {name:'Blues in A', bars:['A','A','A','A','D','D','A','A','E','D','A','E']},
+  {name:'Pop G–D–Em–C', bars:['G','D','Em','C']},
+  {name:'Rock E–G–A', bars:['E','G','A','A']},
+  {name:'Jazz ii–V–I in C', bars:['Dm','G','C','C']},
+];
+let curProg=0,progBar=-1,barHit=false;
+
+function setBpm(v){
+  bpm=+v;
+  const a=document.getElementById('bpmVal'),b=document.getElementById('bpmVal2');
+  if(a)a.textContent=v;if(b)b.textContent=v;
+  const s1=document.getElementById('bpmSlider'),s2=document.getElementById('bpmSlider2');
+  if(s1)s1.value=v;if(s2)s2.value=v;
+}
+
+function metroClick(accent){
+  if(!actx)return;
+  const t=actx.currentTime;
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type='square';o.frequency.value=accent?1900:1300; // hoog genoeg om niet als basnoot gedetecteerd te worden
+  g.gain.setValueAtTime(0.2,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.035);
+  o.connect(g);g.connect(actx.destination);
+  o.start(t);o.stop(t+0.04);
+}
+
+function toggleMetro(){metroOn?stopMetro():startMetro();}
+function startMetro(){
+  if(!actx)return;
+  if(actx.state==='suspended')actx.resume();
+  metroOn=true;beatNum=-1;beatStamps=[];
+  if(micSubMode==='prog'){progBar=-1;buildProgSeq();}
+  if(micSubMode==='ritme')newRhythmNote();
+  updateMetroBtns();
+  scheduleBeat();
+}
+function stopMetro(){
+  if(!metroOn)return;
+  metroOn=false;clearTimeout(metroTO);metroTO=null;
+  updateMetroBtns();
+}
+function updateMetroBtns(){
+  const b1=document.getElementById('metroBtn'),b2=document.getElementById('metroBtn2');
+  if(b1)b1.textContent=metroOn?'⏹ Stop':'▶ Metronoom';
+  if(b2)b2.textContent=metroOn?'⏹ Stop':'▶ Start';
+}
+
+function scheduleBeat(){
+  if(!metroOn)return;
+  beatNum++;
+  const beatInBar=beatNum%4;
+  metroClick(beatInBar===0);
+  beatStamps.push(Date.now());
+  if(beatStamps.length>8)beatStamps.shift();
+  pulseBeatDots(beatInBar);
+  onBeat(beatInBar);
+  metroTO=setTimeout(scheduleBeat,60000/bpm);
+}
+
+function pulseBeatDots(active){
+  const wrap=document.getElementById('beatDots');
+  if(!wrap)return;
+  if(!wrap.children.length){
+    for(let i=0;i<4;i++){
+      const d=document.createElement('div');
+      d.style.cssText='width:14px;height:14px;border-radius:50%;background:var(--surface2);transition:all 0.1s';
+      wrap.appendChild(d);
+    }
+  }
+  [...wrap.children].forEach((d,i)=>{
+    d.style.background=i===active?(i===0?'var(--accent)':'var(--blue)'):'var(--surface2)';
+    d.style.transform=i===active?'scale(1.4)':'scale(1)';
+  });
+}
+
+function onBeat(beatInBar){
+  if(micSubMode==='ritme'){
+    if(beatNum>0&&beatNum%8===0)newRhythmNote();
+  } else if(micSubMode==='prog'){
+    if(beatInBar===0){
+      const P=PROGRESSIONS[curProg];
+      // vorige maat afronden
+      if(progBar>=0){
+        markProgBar(progBar,barHit);
+        if(barHit){mG++;mStr++;xp++;}else{mB++;mStr=0;}
+        updUI();
+      }
+      progBar=(progBar+1)%P.bars.length;
+      barHit=false;
+      const chord=P.bars[progBar];
+      document.getElementById('pgChord').textContent=chord;
+      highlightProgBar(progBar);
+      setFeed('pgFeed','listen',`🎧 Speel de grondtoon van ${chord}...`);
+    }
+  }
+}
+
+function newRhythmNote(){
+  const L=LEVELS[lvl];
+  const cells=lvlCells();
+  const c=cells[Math.floor(Math.random()*cells.length)];
+  rTargetNote=FB[c.string][c.fret].note;
+  document.getElementById('rNote').textContent=rTargetNote;
+}
+
+function chordRoot(ch){return ch.replace('m','').replace('♭','b');}
+
+function buildProgSeq(){
+  const P=PROGRESSIONS[curProg];
+  const wrap=document.getElementById('progSeq');wrap.innerHTML='';
+  P.bars.forEach((b,i)=>{
+    const chip=document.createElement('div');
+    chip.id='pgBar'+i;
+    chip.style.cssText='padding:5px 10px;border-radius:7px;background:var(--surface2);font-family:Bebas Neue,cursive;font-size:0.95rem;letter-spacing:1px;color:var(--muted);border:1px solid transparent;transition:all 0.2s';
+    chip.textContent=b;
+    wrap.appendChild(chip);
+  });
+}
+function highlightProgBar(i){
+  const P=PROGRESSIONS[curProg];
+  P.bars.forEach((_,j)=>{
+    const c=document.getElementById('pgBar'+j);
+    if(c&&j===i){c.style.borderColor='var(--accent)';c.style.color='var(--text)';}
+  });
+}
+function markProgBar(i,hit){
+  const c=document.getElementById('pgBar'+i);
+  if(c){c.style.background=hit?'rgba(63,207,110,0.2)':'rgba(232,64,64,0.15)';c.style.color=hit?'var(--green)':'var(--red)';c.style.borderColor='transparent';}
+}
+function buildProgSelector(){
+  const wrap=document.getElementById('progSelect');if(!wrap)return;wrap.innerHTML='';
+  PROGRESSIONS.forEach((p,i)=>{
+    const b=document.createElement('button');
+    b.className='tag'+(i===curProg?' active':'');
+    b.textContent=p.name;
+    b.onclick=()=>{curProg=i;stopMetro();progBar=-1;buildProgSeq();buildProgSelector();document.getElementById('pgChord').textContent='—';setFeed('pgFeed','idle','Druk ▶ Start om te beginnen');};
+    wrap.appendChild(b);
+  });
+}
+
+function setMicMode(m){
+  micSubMode=m;
+  stopMetro();
+  document.querySelectorAll('#micModeTabs .tag').forEach((t,i)=>t.classList.toggle('active',['noot','ritme','prog'][i]===m));
+  document.getElementById('mNoteCard').style.display=m==='noot'?'block':'none';
+  document.getElementById('mRitmeCard').style.display=m==='ritme'?'block':'none';
+  document.getElementById('mProgCard').style.display=m==='prog'?'block':'none';
+  if(m==='prog'){buildProgSelector();buildProgSeq();}
+  if(m==='ritme'){newRhythmNote();pulseBeatDots(-1);}
+  if(m==='noot'&&!curM)nextMicQ();
+  drawNeck(null,m==='noot'?curM:null,null,null,null);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1067,10 +1400,10 @@ async function startMic(){
     micGain.connect(analyser);
     micStream=stream;micOn=true;
     updateMicUI();
-    if(mode==='mic')setFeed('mFeed','listen','🎧 Luisteren... speel de noot!');
+    if(mode==='mic'&&micSubMode==='noot')setFeed('mFeed','listen','🎧 Luisteren... speel de noot!');
     if(mode==='ear')setFeed('eFeed','listen','🎧 Luisteren... speel de noot die je hoorde!');
     pitchTick=setInterval(detectPitch,120);vuLoop();
-    if(mode==='mic'&&!curM)nextMicQ();
+    if(mode==='mic'&&micSubMode==='noot'&&!curM)nextMicQ();
   }catch(e){
     const fid=mode==='ear'?'eFeed':'mFeed';
     setFeed(fid,'no','⚠️ Geen toegang — sta microfoon toe in instellingen');
@@ -1081,7 +1414,7 @@ function stopMic(){
   if(vuRaf){cancelAnimationFrame(vuRaf);vuRaf=null;}
   if(micStream)micStream.getTracks().forEach(t=>t.stop());
   updateMicUI();
-  if(mode==='mic')setFeed('mFeed','idle','Zet microfoon aan ↓');
+  if(mode==='mic'&&micSubMode==='noot')setFeed('mFeed','idle','Zet microfoon aan ↑');
 }
 function vuLoop(){
   if(!micOn||!analyser)return;
@@ -1104,11 +1437,41 @@ function detectPitch(){
   document.getElementById('eVuNote').textContent=det;
 
   // Route naar juiste mode
-  if(mode==='mic'&&curM){
+  if(mode==='mic'&&micSubMode==='noot'&&curM){
     if(det===curM.correctNote){
       micBusy=true;mG++;mStr++;xp+=2;
+      cc[curM.key]=(cc[curM.key]||0)+1;
       setFeed('mFeed','ok',`✅ ${det}! Correct!`);drawNeck(null,null,curM,'ok',null);
       if(mStr%3===0)toast(`🔥 ${mStr}× STREAK!`);updUI();chkLvl();setTimeout(nextMicQ,1200);
+    }
+  } else if(mode==='mic'&&micSubMode==='ritme'&&metroOn&&!rHitCooldown){
+    if(det===rTargetNote&&beatStamps.length){
+      rHitCooldown=true;setTimeout(()=>rHitCooldown=false,300);
+      const now=Date.now(),period=60000/bpm;
+      let best=1e9;
+      beatStamps.forEach(b=>best=Math.min(best,Math.abs(now-b)));
+      const sinceLast=now-beatStamps[beatStamps.length-1];
+      best=Math.min(best,Math.abs(sinceLast-period)); // vroege noot t.o.v. volgende tel
+      if(best<=120){
+        mG++;mStr++;xp++;
+        setFeed('rFeed','ok',`🎯 Strak op de tel! (${Math.round(best)} ms)`);
+        if(mStr%5===0)toast(`🥁 ${mStr}× STRAK!`);
+      }else if(best<=230){
+        setFeed('rFeed','warn',`👍 Bijna — ${Math.round(best)} ms ernaast`);
+      }else{
+        mStr=0;
+        setFeed('rFeed','no',`⏱ ${sinceLast<period/2?'Te laat':'Te vroeg'} — ${Math.round(best)} ms`);
+      }
+      updUI();
+    }
+  } else if(mode==='mic'&&micSubMode==='prog'&&metroOn&&!barHit&&progBar>=0){
+    const P=PROGRESSIONS[curProg];
+    const root=chordRoot(P.bars[progBar]);
+    if(det===root){
+      barHit=true;
+      setFeed('pgFeed','ok',`✅ ${root}! Maat geraakt`);
+      const c=document.getElementById('pgBar'+progBar);
+      if(c)c.style.background='rgba(63,207,110,0.25)';
     }
   } else if(mode==='ear'&&curE&&!eLocked&&(earSubMode==='note'||earSubMode==='octave')){
     if(det===curE.note){
@@ -1187,10 +1550,8 @@ function openPat(pat,type){
   detail.scrollIntoView({behavior:'smooth',block:'nearest'});
   // Play the pattern
   setTimeout(()=>{
-    const rootMidi=40+patRoot; // E2 + semitones
-    // adjust to reasonable range
-    const midi=rootMidi+(rootMidi<45?12:0);
-    playChord(pat.intervals,midi,true);
+    const rootMidi=40+(((patRoot-4)+12)%12); // grondtoon op E-snaar positie
+    playChord(pat.intervals,rootMidi,true);
   },300);
 }
 
@@ -1214,20 +1575,7 @@ const INT_FULL=['Grondtoon','Kleine secunde','Grote secunde','Kleine terts','Gro
 
 function showPatOnNeck(){
   if(!activePat)return;
-  const cells=[];
-  for(let s=0;s<4;s++){
-    for(let f=0;f<=12;f++){
-      const midi=OPEN_MIDI[s]+f;
-      const noteIdx=((midi%12)+12)%12;
-      const relIdx=((noteIdx-patRoot)+12)%12;
-      const posInPat=activePat.intervals.indexOf(relIdx);
-      const posOct=activePat.intervals.indexOf(relIdx+12); // octaaf-notatie in patroon
-      if(posInPat!==-1||posOct!==-1){
-        cells.push({string:s,fret:f,color:INT_COLORS[relIdx],label:INT_SHORT[relIdx]});
-      }
-    }
-  }
-  drawNeck(null,null,null,null,cells);
+  drawNeck(null,null,null,null,patternCellsForNeck());
 }
 
 function showPatPositions(){
@@ -1254,7 +1602,99 @@ function showPatPositions(){
   });
 }
 
+// ── GROOVE SPELER ──
+let grooveTimer=null,grooveIdx=0,grooveBpmVal=90,grooveCells=[];
+
+// Bouw de loop: per grondtoon-positie (laag → hoog) een box-vingerzetting
+function computeGrooveCells(){
+  // Alle posities van de grondtoon op de hals, gesorteerd van laag naar hoog
+  const roots=[];
+  for(let s=0;s<4;s++)for(let f=0;f<=12;f++){
+    if((((OPEN_MIDI[s]+f)%12)+12)%12===patRoot)roots.push({s,f,midi:OPEN_MIDI[s]+f});
+  }
+  roots.sort((a,b)=>a.midi-b.midi||a.s-b.s);
+
+  const boxes=[];
+  roots.forEach(r=>{
+    const box=[];let ok=true;
+    for(const iv of activePat.intervals){
+      const target=r.midi+iv;
+      let best=null;
+      for(let s=0;s<4;s++){
+        const f=target-OPEN_MIDI[s];
+        if(f<0||f>12)continue;
+        const dist=Math.abs(f-(r.f+2));
+        if(!best||dist<best.dist)best={string:s,fret:f,dist};
+      }
+      // Box moet speelbaar zijn: alle noten binnen handbereik van de positie
+      if(!best||best.dist>6){ok=false;break;}
+      const rel=iv%12;
+      box.push({string:best.string,fret:best.fret,midi:target,color:INT_COLORS[rel],label:INT_SHORT[rel]});
+    }
+    if(ok&&box.length)boxes.push(box);
+  });
+
+  // Per box: omhoog én omlaag, dan door naar de volgende positie
+  const seq=[];
+  boxes.forEach(box=>{seq.push(...box,...box.slice(1,-1).reverse());});
+  return seq;
+}
+
+function toggleGroove(){grooveTimer?stopGroove():startGroove();}
+function startGroove(){
+  if(!activePat||!actx)return;
+  if(actx.state==='suspended')actx.resume();
+  document.getElementById('grooveBtn').textContent='⏹ Stop';
+  grooveIdx=0;
+  grooveCells=computeGrooveCells();
+  if(!grooveCells.length){stopGroove();return;}
+  const tick=()=>{
+    const cell=grooveCells[grooveIdx%grooveCells.length];
+    playNote(cell.midi,0.5);
+    // Alle patroon-cellen tonen; alléén de noot die nu klinkt krijgt het accent
+    const allCells=patternCellsForNeck();
+    allCells.push({...cell,label:patLabelMode==='note'?noteName(cell.midi):cell.label,big:true});
+    drawNeck(null,null,null,null,allCells);
+    grooveIdx++;
+    grooveTimer=setTimeout(tick,60000/grooveBpmVal);
+  };
+  grooveTimer=setTimeout(tick,0);
+}
+function stopGroove(){
+  if(grooveTimer){clearTimeout(grooveTimer);grooveTimer=null;}
+  const b=document.getElementById('grooveBtn');
+  if(b)b.textContent='▶ Loop';
+  if(activePat&&mode==='patterns')showPatOnNeck();
+}
+
+// Hulpfunctie: alle patroon-cellen voor de hals (gedeeld met showPatOnNeck)
+let patLabelMode='note'; // 'note' = nootnamen, 'interval' = R/3/5 etc.
+function setPatLabels(m){
+  patLabelMode=m;
+  document.getElementById('lblNote').classList.toggle('active',m==='note');
+  document.getElementById('lblInt').classList.toggle('active',m==='interval');
+  if(grooveTimer)return; // loop tekent zelf bij volgende tick
+  showPatOnNeck();
+}
+function patternCellsForNeck(){
+  const cells=[];
+  if(!activePat)return cells;
+  for(let s=0;s<4;s++){
+    for(let f=0;f<=12;f++){
+      const midi=OPEN_MIDI[s]+f;
+      const noteIdx=((midi%12)+12)%12;
+      const relIdx=((noteIdx-patRoot)+12)%12;
+      if(activePat.intervals.indexOf(relIdx)!==-1||activePat.intervals.indexOf(relIdx+12)!==-1){
+        const label=patLabelMode==='note'?NOTES[noteIdx]:INT_SHORT[relIdx];
+        cells.push({string:s,fret:f,color:INT_COLORS[relIdx],label});
+      }
+    }
+  }
+  return cells;
+}
+
 function closePat(){
+  stopGroove();
   activePat=null;
   document.getElementById('patDetail').classList.remove('on');
   drawNeck(null,null,null,null,null);
@@ -1267,7 +1707,7 @@ const SAVE_KEY='bassTrainerProgress_v1';
 function saveProgress(){
   try{
     localStorage.setItem(SAVE_KEY,JSON.stringify({
-      lvl,xp,elvl,exp,qG,qB,eG,eB,mG,mB,oG,oB,wc,ewc
+      lvl,xp,elvl,exp,qG,qB,eG,eB,mG,mB,oG,oB,wc,ewc,cc,practiceDays
     }));
   }catch(e){}
 }
@@ -1278,7 +1718,7 @@ function loadProgress(){
     lvl=d.lvl||0;xp=d.xp||0;elvl=d.elvl||0;exp=d.exp||0;
     qG=d.qG||0;qB=d.qB||0;eG=d.eG||0;eB=d.eB||0;
     mG=d.mG||0;mB=d.mB||0;oG=d.oG||0;oB=d.oB||0;
-    wc=d.wc||{};ewc=d.ewc||{};
+    wc=d.wc||{};ewc=d.ewc||{};cc=d.cc||{};practiceDays=d.practiceDays||{};
   }catch(e){}
 }
 function resetProgress(){
@@ -1286,9 +1726,47 @@ function resetProgress(){
   try{localStorage.removeItem(SAVE_KEY);}catch(e){}
   lvl=0;xp=0;elvl=0;exp=0;
   qG=0;qB=0;qStr=0;eG=0;eB=0;eStr=0;mG=0;mB=0;mStr=0;oG=0;oB=0;oStr=0;
-  wc={};ewc={};curQ=null;curE=null;curM=null;curO=null;
+  wc={};ewc={};cc={};practiceDays={};curQ=null;curE=null;curM=null;curO=null;
   updUI();drawNeck(null,null,null,null,null);
   toast('🔄 Voortgang gewist');
+}
+
+// ── STATISTIEKEN & HEATMAP ──
+function logPractice(){const k=new Date().toISOString().slice(0,10);practiceDays[k]=(practiceDays[k]||0)+1;}
+function dayStreak(){
+  let n=0;const d=new Date();
+  for(;;){const k=d.toISOString().slice(0,10);if(practiceDays[k]){n++;d.setDate(d.getDate()-1);}else break;}
+  return n;
+}
+function updateStats(){
+  const tg=qG+eG+mG+oG,tb=qB+eB+mB+oB,tot=tg+tb;
+  const acc=tot?Math.round(tg/tot*100):0;
+  const sd=dayStreak();
+  const el=document.getElementById('statsText');
+  if(el)el.innerHTML=`Totaal beantwoord: <strong>${tot}</strong> · Goed: <strong style="color:var(--green)">${tg}</strong> · Nauwkeurigheid: <strong>${acc}%</strong><br>🔥 Dagstreak: <strong>${sd} dag${sd===1?'':'en'}</strong> op rij geoefend`;
+}
+function toggleHeatmap(){
+  heatmapOn=!heatmapOn;
+  const b=document.getElementById('heatBtn');
+  if(b)b.textContent=heatmapOn?'🎸 Normale hals':'🌡 Beheersing tonen';
+  if(heatmapOn)showHeatmap();else drawNeck(hlCell,null,null,null,null);
+}
+function showHeatmap(){
+  const cells=[];
+  const keys=new Set([...Object.keys(wc),...Object.keys(cc)]);
+  keys.forEach(k=>{
+    const[s,f]=k.split('_').map(Number);
+    if(isNaN(s)||isNaN(f)||s<0||s>3||f<0||f>12)return;
+    const w=wc[k]||0,c=cc[k]||0;
+    let col;
+    if(w>=2)col='#e84040';
+    else if(w===1)col='#f97316';
+    else if(c>=3)col='#3fcf6e';
+    else if(c>=1)col='#86efac';
+    else return;
+    cells.push({string:s,fret:f,color:col,label:FB[s][f].note});
+  });
+  drawNeck(null,null,null,null,cells);
 }
 
 // ══════════════════════════════════════════════════════
@@ -1304,6 +1782,7 @@ function updUI(){
   document.getElementById('xpTxt').textContent=xp+' XP';
   document.getElementById('progLabel').textContent=L.name;
   document.getElementById('lvlChip').textContent='LVL '+(lvl+1);
+  logPractice();updateStats();
   saveProgress();
 }
 function chkLvl(){
@@ -1324,6 +1803,8 @@ function toast(msg){const e=document.getElementById('toast');e.textContent=msg;e
 const MODES=['learn','quiz','ear','octave','mic','patterns'];
 function setMode(m){
   mode=m;
+  stopMetro();stopGroove();heatmapOn=false;
+  const hb=document.getElementById('heatBtn');if(hb)hb.textContent='🌡 Beheersing tonen';
   MODES.forEach(k=>{
     document.getElementById('tab-'+k).classList.toggle('active',k===m);
     const p=document.getElementById('p'+k[0].toUpperCase()+k.slice(1));if(p)p.classList.toggle('active',k===m);
