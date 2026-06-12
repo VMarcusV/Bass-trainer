@@ -770,6 +770,7 @@ function startTimer(){
         document.querySelectorAll('#qGrid .ab').forEach(b=>{b.disabled=true;if(b.textContent===curQ.correctNote)b.classList.add('ok');});
         drawNeck(null,null,curQ,'no');
         setFeed('qFeed','warn','⏰ Tijd! Het was '+curQ.correctNote);
+        setTimeout(()=>playNote(curQ.midi),300);
         document.getElementById('qNext').classList.add('on');
         updUI();
       }
@@ -974,12 +975,13 @@ function buildEarGrid(){
     const iLevel=Math.min(3,Math.floor(elvl));
     const allowed=INT_LEVELS[iLevel];
     const div=document.createElement('div');div.className='ag3';
-    // Show 6 intervals as options including the correct one
-    const opts=shuffle([...new Set([curE.semi,...INTERVALS.filter(iv=>allowed.includes(iv[0])&&iv[0]!==curE.semi).map(iv=>iv[0]).slice(0,5)])]).slice(0,6);
-    if(!opts.includes(curE.semi))opts[0]=curE.semi;
-    shuffle(opts).forEach(semi=>{
+    // 6 opties: het juiste interval + willekeurige distractors uit dit level
+    const distractors=shuffle(INTERVALS.filter(iv=>allowed.includes(iv[0])&&iv[0]!==curE.semi).map(iv=>iv[0])).slice(0,5);
+    const opts=shuffle([curE.semi,...distractors]);
+    opts.forEach(semi=>{
       const info=INTERVALS.find(iv=>iv[0]===semi);
       const b=document.createElement('button');b.className='ab';
+      b.dataset.semi=semi;
       b.innerHTML=`<div style="font-size:0.75rem;line-height:1.2">${info[2]}<br><span style="font-size:0.6rem;color:var(--muted);font-family:'DM Sans',sans-serif;font-weight:400">${info[1]}</span></div>`;
       b.onclick=()=>submitEarQ(semi,b);div.appendChild(b);
     });
@@ -1013,10 +1015,9 @@ function submitEarQ(chosen,btn){
 
   document.querySelectorAll('#eGridWrap .ab').forEach(b=>{
     b.disabled=true;
-    const val=earSubMode==='interval'?parseInt(b.dataset?.semi):b.textContent;
     if(earSubMode==='interval'){
-      if(b===btn){b.classList.add(ok?'ok':'no');}
-      else if(b.onclick&&b.onclick.toString().includes(curE.semi)){b.classList.add('ok');}
+      if(Number(b.dataset.semi)===curE.semi)b.classList.add('ok');
+      else if(b===btn&&!ok)b.classList.add('no');
     }else{
       if(b.textContent===displayNote)b.classList.add('ok');
       else if(b===btn&&!ok)b.classList.add('no');
@@ -1233,10 +1234,12 @@ function metroClick(accent){
 }
 
 function toggleMetro(){metroOn?stopMetro():startMetro();}
+let nextBeatAt=0;
 function startMetro(){
   if(!actx)return;
   if(actx.state==='suspended')actx.resume();
   metroOn=true;beatNum=-1;beatStamps=[];
+  nextBeatAt=Date.now();
   if(micSubMode==='prog'){progBar=-1;buildProgSeq();}
   if(micSubMode==='ritme')newRhythmNote();
   updateMetroBtns();
@@ -1262,7 +1265,10 @@ function scheduleBeat(){
   if(beatStamps.length>8)beatStamps.shift();
   pulseBeatDots(beatInBar);
   onBeat(beatInBar);
-  metroTO=setTimeout(scheduleBeat,60000/bpm);
+  // Zelf-corrigerend: plan t.o.v. de ideale tijdlijn i.p.v. "nu + periode"
+  nextBeatAt+=60000/bpm;
+  const wait=Math.max(0,nextBeatAt-Date.now());
+  metroTO=setTimeout(scheduleBeat,wait);
 }
 
 function pulseBeatDots(active){
@@ -1389,11 +1395,15 @@ function updateMicUI(){
   }
 }
 
+let micBuf=null; // hergebruikte audio-buffer (geen GC-druk op mobiel)
 async function startMic(){
   try{
+    if(!actx)return;
     if(actx.state==='suspended')await actx.resume();
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw new Error('unsupported');
     const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true},video:false});
-    analyser=actx.createAnalyser();analyser.fftSize=8192;analyser.smoothingTimeConstant=0.5;
+    analyser=actx.createAnalyser();analyser.fftSize=4096;analyser.smoothingTimeConstant=0.5;
+    micBuf=new Float32Array(analyser.fftSize);
     // Gain-boost zodat zachte bas-signalen ook gehoord worden
     const micGain=actx.createGain();micGain.gain.value=4.0;
     actx.createMediaStreamSource(stream).connect(micGain);
@@ -1417,21 +1427,21 @@ function stopMic(){
   if(mode==='mic'&&micSubMode==='noot')setFeed('mFeed','idle','Zet microfoon aan ↑');
 }
 function vuLoop(){
-  if(!micOn||!analyser)return;
-  const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
-  let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
+  if(!micOn||!analyser||!micBuf)return;
+  analyser.getFloatTimeDomainData(micBuf);
+  let rms=0;for(const v of micBuf)rms+=v*v;rms=Math.sqrt(rms/micBuf.length);
   const w=Math.min(100,rms*1800)+'%';
   document.getElementById('vuBar').style.width=w;
   document.getElementById('eVuBar').style.width=w;
   vuRaf=requestAnimationFrame(vuLoop);
 }
 function detectPitch(){
-  if(!analyser||micBusy)return;
+  if(!analyser||micBusy||!micBuf)return;
   if(Date.now()<suppressUntil)return; // app speelt zelf geluid — niet luisteren
-  const buf=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(buf);
-  let rms=0;for(const v of buf)rms+=v*v;rms=Math.sqrt(rms/buf.length);
+  analyser.getFloatTimeDomainData(micBuf);
+  let rms=0;for(const v of micBuf)rms+=v*v;rms=Math.sqrt(rms/micBuf.length);
   if(rms<0.0015){document.getElementById('vuNote').textContent='—';document.getElementById('eVuNote').textContent='—';return;}
-  const freq=autoCorr(buf,actx.sampleRate);if(freq<25||freq>900)return;
+  const freq=autoCorr(micBuf,actx.sampleRate);if(freq<25||freq>900)return;
   const midi=Math.round(12*Math.log2(freq/440)+69),det=noteName(midi);
   document.getElementById('vuNote').textContent=det;
   document.getElementById('eVuNote').textContent=det;
@@ -1535,6 +1545,7 @@ function buildGrooveGrid(){
 }
 
 function openPat(pat,type){
+  stopGroove();
   activePat={...pat,patType:type};patRoot=0;
   document.getElementById('pdTitle').textContent=pat.name;
   document.getElementById('pdDesc').textContent=pat.desc;
@@ -1542,7 +1553,7 @@ function openPat(pat,type){
   const rs=document.getElementById('rootSelector');rs.innerHTML='';
   NOTES.forEach((n,i)=>{
     const b=document.createElement('button');b.className='root-btn'+(i===0?' active':'');
-    b.textContent=n;b.onclick=()=>{patRoot=i;rs.querySelectorAll('.root-btn').forEach(x=>x.classList.toggle('active',x.textContent===n));showPatOnNeck();showPatPositions();};
+    b.textContent=n;b.onclick=()=>{stopGroove();patRoot=i;rs.querySelectorAll('.root-btn').forEach(x=>x.classList.toggle('active',x.textContent===n));showPatOnNeck();showPatPositions();};
     rs.appendChild(b);
   });
   showPatOnNeck();showPatPositions();
@@ -1772,6 +1783,7 @@ function showHeatmap(){
 // ══════════════════════════════════════════════════════
 // SCORE / LEVEL UP
 // ══════════════════════════════════════════════════════
+let lastAnswerTotal=-1;
 function updUI(){
   document.getElementById('qG').textContent=qG;document.getElementById('qB').textContent=qB;document.getElementById('qS').textContent=qStr;
   document.getElementById('eG').textContent=eG;document.getElementById('eB').textContent=eB;document.getElementById('eS').textContent=eStr;
@@ -1782,16 +1794,19 @@ function updUI(){
   document.getElementById('xpTxt').textContent=xp+' XP';
   document.getElementById('progLabel').textContent=L.name;
   document.getElementById('lvlChip').textContent='LVL '+(lvl+1);
-  logPractice();updateStats();
+  // Dagstreak alleen bijwerken als er écht geantwoord is
+  const tot=qG+qB+eG+eB+mG+mB+oG+oB;
+  if(lastAnswerTotal>=0&&tot>lastAnswerTotal)logPractice();
+  lastAnswerTotal=tot;
+  updateStats();
   saveProgress();
 }
 function chkLvl(){
   const L=LEVELS[lvl];
   if(xp>=L.xp&&lvl<LEVELS.length-1){lvl++;xp=0;toast('⬆️ LEVEL UP!');updUI();
-    if(mode==='quiz')setTimeout(nextQ,1200);
-    if(mode==='mic')setTimeout(nextMicQ,1200);
+    if(mode==='quiz')setTimeout(nextQuizQ,1200);
+    if(mode==='mic'&&micSubMode==='noot')setTimeout(nextMicQ,1200);
     if(mode==='octave')setTimeout(nextOctaveQ,1200);
-    drawNeck(null,null,null,null,null);
   }
 }
 let toastT=null;
@@ -1812,7 +1827,10 @@ function setMode(m){
   if(m==='quiz'){if(!curQ)nextQ();else drawNeck(null,curQ,null,null,null);}
   else if(m==='ear'){if(!curE)nextEarQ();else drawNeck(null,null,null,null,null);}
   else if(m==='octave'){if(!curO)nextOctaveQ();else drawNeck(null,curO,null,null,null);}
-  else if(m==='mic'){if(!curM)nextMicQ();else drawNeck(null,curM,null,null,null);}
+  else if(m==='mic'){
+    if(micSubMode==='noot'){if(!curM)nextMicQ();else drawNeck(null,curM,null,null,null);}
+    else drawNeck(null,null,null,null,null);
+  }
   else if(m==='patterns'){closePat();drawNeck(null,null,null,null,null);}
   else drawNeck(hlCell,null,null,null,null);
   document.getElementById('mainContent').scrollTop=0;

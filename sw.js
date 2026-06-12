@@ -1,8 +1,10 @@
-const CACHE = 'bass-trainer-v1';
-const ASSETS = ['./index.html', './manifest.json'];
+// Network-first strategie: altijd de nieuwste versie proberen,
+// cache alleen als fallback wanneer offline.
+const CACHE = 'bass-trainer-v2';
+const ASSETS = ['./index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(()=>{}));
   self.skipWaiting();
 });
 
@@ -15,6 +17,15 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    fetch(e.request)
+      .then(res => {
+        // Verse versie ook in cache zetten voor offline gebruik
+        if (res.ok && e.request.method === 'GET') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request)) // offline → cache
   );
 });
